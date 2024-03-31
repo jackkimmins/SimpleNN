@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <sstream>
 #include <vector>
@@ -38,7 +39,7 @@ public:
             std::vector<float> dataRow;
             std::string label;
             while (std::getline(lineStream, cell, ',')) {
-                if (std::istringstream(cell) >> std::ws && lineStream.peek() == EOF) { // Check if it's the last element
+                if (std::istringstream(cell) >> std::ws && lineStream.peek() == EOF) {
                     label = cell;
                 } else {
                     try {
@@ -48,7 +49,7 @@ public:
                     }
                 }
             }
-            if (label_mapping.find(label) == label_mapping.end()) { // If label not in map, add it
+            if (label_mapping.find(label) == label_mapping.end()) {
                 int newLabel = label_mapping.size();
                 label_mapping[label] = newLabel;
             }
@@ -115,9 +116,12 @@ private:
         return output;
     }
 
-    // Cross-Entropy loss function
+    // Cross-Entropy loss function with numerical stability improvement
     float cross_entropy(const std::vector<float>& predicted, int true_index) {
-        return -std::log(predicted[true_index]);
+        float epsilon = 1e-12; // To prevent log(0)
+        float predicted_prob = std::max(predicted[true_index], epsilon);
+        predicted_prob = std::min(predicted_prob, 1.0f - epsilon);
+        return -std::log(predicted_prob);
     }
 
 public:
@@ -240,13 +244,21 @@ public:
 
         for (int epoch = 0; epoch < epochs; ++epoch) {
             float total_loss = 0.0f;
+            std::cout << "Epoch " << epoch + 1 << "/" << epochs << ":" << std::endl;
 
-            // Training loop
+            // Training loop with progress display
             for (int i = 0; i < training_size; ++i) {
                 backpropagate(dataset.data_train[i], dataset.labels_train[i]);
                 auto [_, outputs] = forward(dataset.data_train[i]);
                 total_loss += cross_entropy(outputs, dataset.labels_train[i]);
+
+                // Progress bar display logic
+                int progress = static_cast<int>(100.0 * (i + 1) / training_size);
+                std::cout << "\r[";
+                std::cout << std::string(progress / 2, '=') << std::string(50 - progress / 2, ' ');
+                std::cout << "] " << progress << "%" << std::flush;
             }
+            std::cout << std::endl; // Move to the next line after the progress bar is complete
 
             float training_loss = total_loss / training_size;
 
@@ -259,7 +271,7 @@ public:
 
             float validation_loss = total_loss / validation_size;
 
-            std::cout << "Epoch " << epoch + 1 << " Training Loss: " << training_loss << ", Validation Loss: " << validation_loss << std::endl;
+            std::cout << "Training Loss: " << training_loss << ", Validation Loss: " << validation_loss << std::endl << std::endl;
 
             // Early stopping logic
             if (validation_loss < best_loss) {
@@ -268,7 +280,7 @@ public:
             } else {
                 patience_counter -= 1; // Decrease patience
                 if (patience_counter == 0) {
-                    std::cout << "Early stopping triggered at epoch " << epoch + 1 << std::endl;
+                    std::cout << "Early stopping triggered at epoch " << epoch + 1 << std::endl << std::endl;
                     break; // Stop training
                 }
             }
@@ -329,6 +341,7 @@ int main() {
     // NeuralNetwork nn(4, 10, 3, 0.01);
     // NeuralNetwork nn(9, 10, 2, 0.001);
     // NeuralNetwork nn(3, 20, 2, 0.001);
+    // NeuralNetwork nn(4, 20, 2, 0.001);
     NeuralNetwork nn(6, 20, 2, 0.001);
 
     // Train the neural network
