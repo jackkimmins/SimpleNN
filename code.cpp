@@ -316,10 +316,10 @@ private:
 
 
 int main() {
-    // std::string filename = "iris.csv";
-    // std::string filename = "breast_cancer.csv";
-    // std::string filename = "social_network_ads.csv";
-    std::string filename = "titanic_dataset.csv";
+    // std::string filename = "datasets/iris.csv";
+    // std::string filename = "datasets/breast_cancer.csv";
+    // std::string filename = "datasets/social_network_ads.csv";
+    std::string filename = "datasets/titanic_dataset.csv";
 
     // Load and split the dataset
     Dataset irisDataset(filename, true);
