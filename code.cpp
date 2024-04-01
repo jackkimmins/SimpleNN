@@ -60,9 +60,7 @@ public:
 
     void splitDataset(float trainSize = 0.8, unsigned int seed = 42) {
         std::vector<int> indices(data.size());
-        std::iota(indices.begin(), indices.end(), 0); // Fill with 0, 1, ..., data.size() - 1
-
-        // unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+        std::iota(indices.begin(), indices.end(), 0);
         std::shuffle(indices.begin(), indices.end(), std::default_random_engine(seed));
 
         int splitIndex = static_cast<int>(data.size() * trainSize);
@@ -73,8 +71,6 @@ public:
         for (int i = splitIndex; i < data.size(); ++i) {
             data_test.push_back(data[indices[i]]);
             labels_test.push_back(labels[indices[i]]);
-
-            // std::cout << data[indices[i]][0] << " " << data[indices[i]][1] << " " << data[indices[i]][2] << " " << data[indices[i]][3] << " " << labels[indices[i]] << std::endl;
         }
 
         std::cout << "Training set size: " << data_train.size() << std::endl;
@@ -124,8 +120,7 @@ private:
         return -std::log(predicted_prob);
     }
 
-public:
-    NeuralNetwork(int input, int hidden, int output, float rate, unsigned int seed = 42) : input_nodes(input), hidden_nodes(hidden), output_nodes(output), learning_rate(rate) {
+    void initializeWeights(int input, int hidden, int output, unsigned int seed) {
         std::default_random_engine generator(seed);
         std::normal_distribution<float> distribution(0.0, 0.1);
 
@@ -137,10 +132,15 @@ public:
             return weights;
         };
 
-        weights_input_hidden = weightInitializer(input_nodes, hidden_nodes);
-        weights_hidden_output = weightInitializer(hidden_nodes, output_nodes);
-        biases_hidden = std::vector<float>(hidden_nodes, 0.0f);
-        biases_output = std::vector<float>(output_nodes, 0.0f);
+        weights_input_hidden = weightInitializer(input, hidden);
+        weights_hidden_output = weightInitializer(hidden, output);
+        biases_hidden = std::vector<float>(hidden, 0.0f);
+        biases_output = std::vector<float>(output, 0.0f);
+    }
+
+public:
+    NeuralNetwork(int input, int hidden, int output, float rate, unsigned int seed = 42) : input_nodes(input), hidden_nodes(hidden), output_nodes(output), learning_rate(rate) {
+        initializeWeights(input, hidden, output, seed);
     }
 
     std::pair<std::vector<float>, std::vector<float>> forward(const std::vector<float>& inputs) {
@@ -235,8 +235,8 @@ public:
     }
 
     void train(int epochs, const Dataset& dataset, float validation_split = 0.1, int patience = 10) {
-        int patience_counter = patience; // Initialize patience counter
-        float best_loss = std::numeric_limits<float>::max(); // Initialize best loss to maximum float value
+        int patience_counter = patience;
+        float best_loss = std::numeric_limits<float>::max();
 
         // Determine the split index for training and validation
         int validation_size = static_cast<int>(dataset.data_train.size() * validation_split);
@@ -253,12 +253,15 @@ public:
                 total_loss += cross_entropy(outputs, dataset.labels_train[i]);
 
                 // Progress bar display logic
-                int progress = static_cast<int>(100.0 * (i + 1) / training_size);
-                std::cout << "\r[";
-                std::cout << std::string(progress / 2, '=') << std::string(50 - progress / 2, ' ');
-                std::cout << "] " << progress << "%" << std::flush;
+                if (false)
+                {
+                    int progress = static_cast<int>(100.0 * (i + 1) / training_size);
+                    std::cout << "\r[";
+                    std::cout << std::string(progress / 2, '=') << std::string(50 - progress / 2, ' ');
+                    std::cout << "] " << progress << "%" << std::flush;
+                }
             }
-            std::cout << std::endl; // Move to the next line after the progress bar is complete
+            std::cout << std::endl;
 
             float training_loss = total_loss / training_size;
 
@@ -289,6 +292,11 @@ public:
 
     // Predict the class label for a single data point
     int predict(const std::vector<float>& inputs) {
+        if (inputs.size() != input_nodes) {
+            std::cerr << "Error: Input size does not match the number of input nodes." << std::endl;
+            return -1;
+        }
+
         auto [_, outputs] = forward(inputs);
         return std::distance(outputs.begin(), std::max_element(outputs.begin(), outputs.end()));
     }
@@ -328,21 +336,21 @@ private:
 
 
 int main() {
-    // std::string filename = "datasets/iris.csv";
+    std::string filename = "datasets/iris.csv";
     // std::string filename = "datasets/breast_cancer.csv";
     // std::string filename = "datasets/social_network_ads.csv";
-    std::string filename = "datasets/titanic_dataset.csv";
+    // std::string filename = "datasets/titanic_dataset.csv";
 
     // Load and split the dataset
     Dataset irisDataset(filename, true);
     irisDataset.splitDataset(0.7);
 
     // Initialize the neural network
-    // NeuralNetwork nn(4, 10, 3, 0.01);
+    NeuralNetwork nn(4, 10, 3, 0.01);
     // NeuralNetwork nn(9, 10, 2, 0.001);
     // NeuralNetwork nn(3, 20, 2, 0.001);
     // NeuralNetwork nn(4, 20, 2, 0.001);
-    NeuralNetwork nn(6, 20, 2, 0.001);
+    // NeuralNetwork nn(6, 20, 2, 0.001);
 
     // Train the neural network
     nn.train(1000, irisDataset);
