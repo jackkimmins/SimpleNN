@@ -1,130 +1,51 @@
-#include <iostream>
-#include <iomanip>
-#include <fstream>
-#include <sstream>
 #include <vector>
-#include <string>
-#include <algorithm>
-#include <random>
-#include <map>
-#include <chrono>
 #include <cmath>
+#include <algorithm>
 #include <numeric>
-#include <unordered_map>
+#include <random>
+#include <iostream>
 #include <limits>
-
-class Dataset {
-public:
-    std::vector<std::vector<float>> data; // Stores the features of the dataset
-    std::vector<int> labels; // Stores the labels of the dataset
-    std::vector<std::vector<float>> data_train, data_test;
-    std::vector<int> labels_train, labels_test;
-    std::unordered_map<std::string, int> label_mapping; // Maps string labels to integers
-
-    Dataset(const std::string& filename, bool skipHeader = false) {
-        loadDataset(filename, skipHeader);
-    }
-
-    void loadDataset(const std::string& filename, bool skipHeader) {
-        std::ifstream file(filename);
-        std::string line;
-        
-        if (skipHeader) {
-            std::getline(file, line); // Skip the first line
-        }
-
-        while (std::getline(file, line)) {
-            std::stringstream lineStream(line);
-            std::string cell;
-            std::vector<float> dataRow;
-            std::string label;
-            while (std::getline(lineStream, cell, ',')) {
-                if (std::istringstream(cell) >> std::ws && lineStream.peek() == EOF) {
-                    label = cell;
-                } else {
-                    try {
-                        dataRow.push_back(std::stof(cell));
-                    } catch (const std::exception& e) {
-                        std::cerr << "Error converting string to float: " << e.what() << '\n';
-                    }
-                }
-            }
-            if (label_mapping.find(label) == label_mapping.end()) {
-                int newLabel = label_mapping.size();
-                label_mapping[label] = newLabel;
-            }
-            data.push_back(dataRow);
-            labels.push_back(label_mapping[label]);
-        }
-    }
-
-    void splitDataset(float trainSize = 0.8, unsigned int seed = 42) {
-        std::vector<int> indices(data.size());
-        std::iota(indices.begin(), indices.end(), 0);
-        std::shuffle(indices.begin(), indices.end(), std::default_random_engine(seed));
-
-        int splitIndex = static_cast<int>(data.size() * trainSize);
-        for (int i = 0; i < splitIndex; ++i) {
-            data_train.push_back(data[indices[i]]);
-            labels_train.push_back(labels[indices[i]]);
-        }
-        for (int i = splitIndex; i < data.size(); ++i) {
-            data_test.push_back(data[indices[i]]);
-            labels_test.push_back(labels[indices[i]]);
-        }
-
-        std::cout << "Training set size: " << data_train.size() << std::endl;
-        std::cout << "Testing set size: " << data_test.size() << std::endl;
-    }
-};
+#include <utility>
 
 class NeuralNetwork {
 private:
-    std::vector<std::vector<float>> weights_input_hidden;
-    std::vector<float> biases_hidden;
-    std::vector<std::vector<float>> weights_hidden_output;
-    std::vector<float> biases_output;
+    // Matrices for weights and vectors for biases
+    std::vector<std::vector<float>> weights_input_hidden, weights_hidden_output;
+    std::vector<float> biases_hidden, biases_output;
+
+    // Learning rate for the gradient descent optimisation algorithm
     float learning_rate;
+
+    // Number of nodes in each layer of the network
     int input_nodes, hidden_nodes, output_nodes;
 
-    // Sigmoid activation function
-    float sigmoid(float x) {
-        return 1.0f / (1.0f + std::exp(-x));
-    }
+    // Activation function and its derivative
+    float sigmoid(float x) { return 1.0f / (1.0f + std::exp(-x)); }
+    float sigmoid_derivative(float x) { return x * (1 - x); }
 
-    // Derivative of sigmoid function
-    float sigmoid_derivative(float x) {
-        return x * (1 - x);
-    }
 
-    // Softmax function for output layer
+    // Softmax function for the output layer to normalise outputs to a probability distribution
     std::vector<float> softmax(const std::vector<float>& x) {
         std::vector<float> output(x.size());
-        float maxElement = *std::max_element(x.begin(), x.end());
-        float sum = 0.0f;
-        for (size_t i = 0; i < x.size(); ++i) {
-            output[i] = std::exp(x[i] - maxElement); // Improve numerical stability
-            sum += output[i];
-        }
-        for (size_t i = 0; i < x.size(); ++i) {
-            output[i] /= sum;
-        }
+        float maxElement = *max_element(x.begin(), x.end()), sum = 0.0f;
+        std::transform(x.begin(), x.end(), output.begin(), [&](float val) { return std::exp(val - maxElement); });
+        sum = accumulate(output.begin(), output.end(), 0.0f);
+        for (auto& val : output) val /= sum;
         return output;
     }
 
-    // Cross-Entropy loss function with numerical stability improvement
+    // Cross-entropy loss function to measure prediction error
     float cross_entropy(const std::vector<float>& predicted, int true_index) {
-        float epsilon = 1e-12; // To prevent log(0)
-        float predicted_prob = std::max(predicted[true_index], epsilon);
-        predicted_prob = std::min(predicted_prob, 1.0f - epsilon);
+        float epsilon = 1e-12, predicted_prob = std::clamp(predicted[true_index], epsilon, 1.0f - epsilon);
         return -std::log(predicted_prob);
     }
 
-    void initializeWeights(int input, int hidden, int output, unsigned int seed) {
+    // Initialises weights and biases with random values from a normal distribution
+    void initialiseWeights(int input, int hidden, int output, unsigned int seed) {
         std::default_random_engine generator(seed);
         std::normal_distribution<float> distribution(0.0, 0.1);
 
-        auto weightInitializer = [&](int rows, int cols) {
+        auto weightInitialiser = [&](int rows, int cols) {
             std::vector<std::vector<float>> weights(rows, std::vector<float>(cols));
             for (auto& row : weights)
                 for (auto& val : row)
@@ -132,17 +53,19 @@ private:
             return weights;
         };
 
-        weights_input_hidden = weightInitializer(input, hidden);
-        weights_hidden_output = weightInitializer(hidden, output);
-        biases_hidden = std::vector<float>(hidden, 0.0f);
-        biases_output = std::vector<float>(output, 0.0f);
+        weights_input_hidden = weightInitialiser(input, hidden);
+        weights_hidden_output = weightInitialiser(hidden, output);
+        biases_hidden.resize(hidden, 0.0f);
+        biases_output.resize(output, 0.0f);
     }
 
 public:
+    // Constructor initialises the network architecture and learning parameters
     NeuralNetwork(int input, int hidden, int output, float rate, unsigned int seed = 42) : input_nodes(input), hidden_nodes(hidden), output_nodes(output), learning_rate(rate) {
-        initializeWeights(input, hidden, output, seed);
+        initialiseWeights(input, hidden, output, seed);
     }
 
+    // Forward pass through the network to calculate output values
     std::pair<std::vector<float>, std::vector<float>> forward(const std::vector<float>& inputs) {
         auto computeLayerOutputs = [&](const std::vector<float>& inputs, const std::vector<std::vector<float>>& weights, const std::vector<float>& biases, bool isOutput = false) {
             std::vector<float> outputs(weights[0].size(), 0.0f);
@@ -234,7 +157,13 @@ public:
         }
     }
 
-    void train(int epochs, const Dataset& dataset, float validation_split = 0.1, int patience = 10) {
+    bool train(int epochs, const Dataset& dataset, float validation_split = 0.1, int patience = 10) {
+        // Check if the input size matches the number of input nodes
+        if (dataset.getNumInputs() != input_nodes) {
+            std::cerr << "Error: Input size does not match the number of input nodes." << std::endl;
+            return false;
+        }
+
         int patience_counter = patience;
         float best_loss = std::numeric_limits<float>::max();
 
@@ -288,6 +217,8 @@ public:
                 }
             }
         }
+
+        return true;
     }
 
     // Predict the class label for a single data point
@@ -301,71 +232,3 @@ public:
         return std::distance(outputs.begin(), std::max_element(outputs.begin(), outputs.end()));
     }
 };
-
-class Evaluator {
-public:
-    // Evaluate the neural network over a given dataset and return the accuracy
-    static double evaluate(NeuralNetwork& nn, const std::vector<std::vector<float>>& testData, const std::vector<int>& testLabels) {
-        std::vector<int> predictions;
-        for (const auto& inputs : testData) {
-            auto [hidden, output] = nn.forward(inputs);
-            int predicted_label = std::distance(output.begin(), std::max_element(output.begin(), output.end()));
-            predictions.push_back(predicted_label);
-        }
-
-        return computeAccuracy(predictions, testLabels);
-    }
-
-private:
-    static double computeAccuracy(const std::vector<int>& predictions, const std::vector<int>& labels) {
-        if (predictions.size() != labels.size()) {
-            std::cerr << "Error: Size of predictions and labels must be the same." << std::endl;
-            return 0.0;
-        }
-
-        int correctCount = 0;
-        for (size_t i = 0; i < predictions.size(); ++i) {
-            if (predictions[i] == labels[i]) {
-                ++correctCount;
-            }
-        }
-
-        return static_cast<double>(correctCount) / predictions.size();
-    }
-};
-
-
-int main() {
-    std::string filename = "datasets/iris.csv";
-    // std::string filename = "datasets/breast_cancer.csv";
-    // std::string filename = "datasets/social_network_ads.csv";
-    // std::string filename = "datasets/titanic_dataset.csv";
-
-    // Load and split the dataset
-    Dataset irisDataset(filename, true);
-    irisDataset.splitDataset(0.7);
-
-    // Initialize the neural network
-    NeuralNetwork nn(4, 10, 3, 0.01);
-    // NeuralNetwork nn(9, 10, 2, 0.001);
-    // NeuralNetwork nn(3, 20, 2, 0.001);
-    // NeuralNetwork nn(4, 20, 2, 0.001);
-    // NeuralNetwork nn(6, 20, 2, 0.001);
-
-    // Train the neural network
-    nn.train(1000, irisDataset);
-
-    // Evaluate the neural network
-    double accuracy = Evaluator::evaluate(nn, irisDataset.data_test, irisDataset.labels_test);
-    std::cout << "Accuracy on test set: " << accuracy * 100 << "%" << std::endl;
-
-    // Predict a single data point
-    // std::vector<float> dataPoint = {4.8, 3.0, 1.5, 0.3};
-
-    // Pclass,Sex,Age,SibSp,Parch,Fare
-    std::vector<float> dataPoint = {3, 1, 61, 0, 0, 30};
-    int predictedLabel = nn.predict(dataPoint);
-    std::cout << "Predicted label: " << predictedLabel << std::endl;
-
-    return 0;
-}
