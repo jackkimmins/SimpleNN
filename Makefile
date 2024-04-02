@@ -3,8 +3,10 @@ CXXFLAGS = -std=c++20 -O2
 
 TARGET = bin/main
 
-SOURCES = src/main.cpp
+# Automatically find all .cpp files in the src directory
+SOURCES = $(wildcard src/*.cpp)
 
+# Convert the list of source files to a list of object files
 OBJECTS = $(SOURCES:.cpp=.o)
 
 all: $(TARGET)
@@ -16,6 +18,6 @@ run: $(TARGET)
 	./$(TARGET)
 
 clean:
-	rm -f $(TARGET) $(OBJECTS)
+	rm -f $(TARGET) $(OBJECTS) src/*.o
 
 .PHONY: all clean run

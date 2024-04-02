@@ -1,5 +1,6 @@
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <fstream>
 #include <string>
 #include <sstream>
@@ -8,6 +9,7 @@
 #include <algorithm>
 #include <random>
 #include <numeric>
+#include <cctype>
 
 class Dataset {
 public:
@@ -25,7 +27,7 @@ public:
     }
 
     // Load data from a CSV file, optionally skipping the header
-    void loadDataset(const std::string& filename, bool skipHeader) {
+    virtual void loadDataset(const std::string& filename, bool skipHeader) {
         std::ifstream file(filename);
         std::string line, cell, label;
         std::vector<float> dataRow;
@@ -39,13 +41,9 @@ public:
             dataRow.clear();
             // Split each line into cells using ',' as a delimiter
             while (std::getline(lineStream, cell, ',')) {
-                // Check if the current cell is the label (last element in the row)
-                if (lineStream && std::istringstream(cell) >> std::ws && lineStream.peek() == EOF) {
-                    label = cell;
-                } else {
-                    // Convert string to float and add to the current row's data
-                    dataRow.push_back(stof(cell));
-                }
+                // Check if the current cell is the label (last element in the row), if not, parse the cell as a float
+                if (lineStream && std::istringstream(cell) >> std::ws && lineStream.peek() == EOF) label = cell;
+                else dataRow.push_back(stof(cell));
             }
             // Add the processed row to the dataset and assign a numeric label
             data.push_back(dataRow);

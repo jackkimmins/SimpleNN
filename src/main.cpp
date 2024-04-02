@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "dataset.hpp"
+#include "textaware_dataset.hpp"
 #include "neural_network.hpp"
 #include "evaluator.hpp"
 
@@ -16,11 +17,16 @@ int main() {
     // const std::string filename = "datasets/social_network_ads.csv";
     // NeuralNetwork nn(3, 20, 2, 0.001);
 
-    const std::string filename = "datasets/titanic_dataset.csv";
-    NeuralNetwork nn(6, 20, 2, 0.001);
+    // const std::string filename = "datasets/titanic_dataset.csv";
+    // NeuralNetwork nn(6, 20, 2, 0.001);
 
-    Dataset dataset(filename, true);
+    // Dataset dataset(filename, true);
+    // dataset.splitDataset(0.7);
+
+    const std::string filename = "datasets/emails.csv";
+    TextAwareDataset dataset(filename, true);
     dataset.splitDataset(0.7);
+    NeuralNetwork nn(2, 20, 2, 0.001);
 
     // Train the neural network
     if (!nn.train(1000, dataset)) return 1;
