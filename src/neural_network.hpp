@@ -182,13 +182,10 @@ public:
                 total_loss += cross_entropy(outputs, dataset.labels_train[i]);
 
                 // Progress bar display logic
-                if (false)
-                {
-                    int progress = static_cast<int>(100.0 * (i + 1) / training_size);
-                    std::cout << "\r[";
-                    std::cout << std::string(progress / 2, '=') << std::string(50 - progress / 2, ' ');
-                    std::cout << "] " << progress << "%" << std::flush;
-                }
+                int progress = static_cast<int>(100.0 * (i + 1) / training_size);
+                std::cout << "\r[";
+                std::cout << std::string(progress / 2, '=') << std::string(50 - progress / 2, ' ');
+                std::cout << "] " << progress << "%" << std::flush;
             }
             std::cout << std::endl;
 
