@@ -24,7 +24,7 @@ int main() {
     // dataset.splitDataset(0.7);
 
     const std::string filename = "datasets/emails.csv";
-    TextAwareDataset dataset(filename, true);
+    TextDataset dataset(filename, true);
     dataset.splitDataset(0.7);
     NeuralNetwork nn(2, 20, 2, 0.001);
 

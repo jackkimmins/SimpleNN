@@ -1,6 +1,5 @@
 #include <vector>
 #include <unordered_map>
-#include <unordered_set>
 #include <fstream>
 #include <string>
 #include <sstream>
@@ -9,101 +8,93 @@
 #include <algorithm>
 #include <random>
 #include <numeric>
-#include <cctype>
+#include <cctype> // For std::isdigit
+#include <iterator> // For std::istream_iterator
 
-class TextAwareDataset : public Dataset {
-private:
-    // Utility function to safely convert string to float
-    float safeStof(const std::string& str, float defaultValue = 0.0f) {
-        try {
-            return std::stof(str);
-        } catch (const std::invalid_argument& e) {
-            std::cerr << "Invalid argument for conversion: " << str << ". Defaulting to " << defaultValue << ".\n";
-        } catch (const std::out_of_range& e) {
-            std::cerr << "Out of range for conversion: " << str << ". Defaulting to " << defaultValue << ".\n";
-        }
-        return defaultValue; // Return a default value if conversion fails
-    }
-
+class TextDataset : public Dataset {
 public:
-    // Constructor: Use the base class constructor
-    TextAwareDataset(const std::string& filename, bool skipHeader = false) : Dataset(filename, skipHeader) {}
+    // Constructor inherits from Dataset
+    TextDataset(const std::string& filename, bool skipHeader = false) : Dataset(filename, skipHeader) {}
 
 protected:
-    std::unordered_map<std::string, size_t> wordIndex; // Maps each word to its index in the BoW vector
+    std::unordered_map<std::string, int> wordIndex; // Maps words to indices in the feature vector
+    int totalWords = 0; // Keep track of total number of unique words
 
-    // Override the loadDataset method to handle text data
+    // Override loadDataset to handle text
     void loadDataset(const std::string& filename, bool skipHeader) override {
         std::ifstream file(filename);
         std::string line, cell, label;
-        std::vector<std::vector<std::string>> rawData; // Temporarily store text data
+        bool isTextColumn = false; // Flag to check if current column is text
+        std::vector<float> dataRow;
+        std::vector<std::string> textColumns;
 
         if (skipHeader && !std::getline(file, line)) return;
 
-        // Read each line of the file
+        // First pass to detect text columns and construct word index
         while (std::getline(file, line)) {
             std::stringstream lineStream(line);
-            std::vector<std::string> row;
+            textColumns.clear();
+
             while (std::getline(lineStream, cell, ',')) {
-                row.push_back(cell);
-            }
-            rawData.push_back(row);
-        }
-
-        // Determine if a column contains text and should be vectorized
-        std::vector<bool> isTextColumn(rawData[0].size(), false); // Assume all columns are numeric initially
-        detectTextColumns(rawData, isTextColumn);
-
-        // Build the word index from text columns
-        buildWordIndex(rawData, isTextColumn);
-
-        // Convert rawData to numerical data
-        convertToNumerical(rawData, isTextColumn);
-    }
-
-    // Detect which columns contain text data
-    void detectTextColumns(const std::vector<std::vector<std::string>>& rawData, std::vector<bool>& isTextColumn) {
-        for (const auto& row : rawData) {
-            for (size_t i = 0; i < row.size(); i++) {
-                if (!std::all_of(row[i].begin(), row[i].end(), ::isdigit)) {
-                    isTextColumn[i] = true;
+                if (lineStream && std::istringstream(cell) >> std::ws && lineStream.peek() == EOF) {
+                    label = cell; // Assume last column is label
+                } else if (isText(cell)) {
+                    textColumns.push_back(cell);
+                    isTextColumn = true;
+                } else {
+                    // If not text, just convert to float and push to row
+                    dataRow.push_back(stof(cell));
                 }
             }
-        }
-    }
 
-    // Build word index for text columns
-    void buildWordIndex(const std::vector<std::vector<std::string>>& rawData, const std::vector<bool>& isTextColumn) {
-        for (const auto& row : rawData) {
-            for (size_t i = 0; i < row.size(); i++) {
-                if (isTextColumn[i]) {
-                    wordIndex[row[i]] = wordIndex.size(); // Assign an index to each unique word
-                }
-            }
-        }
-    }
-
-    // Convert text columns to numerical using Bag of Words and integrate with the existing data structure
-    void convertToNumerical(const std::vector<std::vector<std::string>>& rawData, const std::vector<bool>& isTextColumn) {
-        for (const auto& row : rawData) {
-            std::vector<float> dataRow;
-            std::string label;
-            for (size_t i = 0; i < row.size(); i++) {
-                if (!isTextColumn[i]) { // For numeric columns, convert directly
-                    std::cout << row[i] << std::endl;
-                    // dataRow.push_back(safeStof(row[i]));
-                } else { // For text columns, use BoW vector
-                    std::vector<float> textVector(wordIndex.size(), 0.0);
-                    if (wordIndex.find(row[i]) != wordIndex.end()) {
-                        textVector[wordIndex[row[i]]] = 1.0; // Set the corresponding index to 1
+            if (isTextColumn) {
+                for (const auto& text : textColumns) {
+                    std::istringstream textStream(text);
+                    std::vector<std::string> words{std::istream_iterator<std::string>{textStream},
+                                                   std::istream_iterator<std::string>{}};
+                    for (const auto& word : words) {
+                        wordIndex.try_emplace(word, totalWords);
+                        if (wordIndex[word] == totalWords) ++totalWords;
                     }
-                    dataRow.insert(dataRow.end(), textVector.begin(), textVector.end());
                 }
             }
-            // Assuming the last column is the label
-            label = row.back();
-            data.push_back(dataRow);
+
+            // Reset stream to start to process data rows again
+            file.clear();
+            file.seekg(0);
+            if (skipHeader) std::getline(file, line); // Skip header again if necessary
+
+            break; // Break after the first pass
+        }
+
+        // Second pass to vectorize text and load data
+        while (std::getline(file, line)) {
+            std::stringstream lineStream(line);
+            std::vector<float> featureVector(totalWords, 0); // Initialize feature vector with zeroes
+
+            while (std::getline(lineStream, cell, ',')) {
+                if (lineStream && std::istringstream(cell) >> std::ws && lineStream.peek() == EOF) {
+                    label = cell;
+                } else if (isTextColumn && isText(cell)) {
+                    std::istringstream textStream(cell);
+                    std::vector<std::string> words{std::istream_iterator<std::string>{textStream},
+                                                   std::istream_iterator<std::string>{}};
+                    for (const auto& word : words) {
+                        int wordIndexValue = wordIndex[word];
+                        featureVector[wordIndexValue] += 1; // Use simple count for word occurrence
+                    }
+                } else {
+                    // Handle numeric data
+                }
+            }
+
+            data.push_back(featureVector);
             labels.push_back(label_mapping.try_emplace(label, label_mapping.size()).first->second);
         }
+    }
+
+    // Function to check if a string is text (not purely numeric)
+    bool isText(const std::string& str) {
+        return std::any_of(str.begin(), str.end(), [](char c) { return !std::isdigit(c) && c != '.' && c != '-'; });
     }
 };
