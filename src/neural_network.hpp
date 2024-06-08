@@ -181,7 +181,7 @@ public:
                 auto [_, outputs] = forward(dataset.data_train[i]);
                 total_loss += cross_entropy(outputs, dataset.labels_train[i]);
 
-                // Progress bar display logic
+                // Progress bar display
                 int progress = static_cast<int>(100.0 * (i + 1) / training_size);
                 std::cout << "\r[";
                 std::cout << std::string(progress / 2, '=') << std::string(50 - progress / 2, ' ');
@@ -202,15 +202,15 @@ public:
 
             std::cout << "Training Loss: " << training_loss << ", Validation Loss: " << validation_loss << std::endl << std::endl;
 
-            // Early stopping logic
+            // Early stopping if the validation loss does not improve
             if (validation_loss < best_loss) {
                 best_loss = validation_loss;
-                patience_counter = patience; // Reset patience
+                patience_counter = patience;
             } else {
-                patience_counter -= 1; // Decrease patience
+                patience_counter -= 1;
                 if (patience_counter == 0) {
                     std::cout << "Early stopping triggered at epoch " << epoch + 1 << std::endl << std::endl;
-                    break; // Stop training
+                    break;
                 }
             }
         }

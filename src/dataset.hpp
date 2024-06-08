@@ -26,13 +26,13 @@ public:
         loadDataset(filename, skipHeader);
     }
 
-    // Load data from a CSV file, optionally skipping the header
+    // Load data from a CSV file
     virtual void loadDataset(const std::string& filename, bool skipHeader) {
         std::ifstream file(filename);
         std::string line, cell, label;
         std::vector<float> dataRow;
         
-        // If skipping the header, read and discard the first line
+        // If skipping the header, read and discard first line
         if (skipHeader && !std::getline(file, line)) return;
 
         // Read each line of the file
